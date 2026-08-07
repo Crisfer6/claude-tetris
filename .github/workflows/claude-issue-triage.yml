@@ -35,7 +35,9 @@ jobs:
                --add-label "..."` (y `--remove-label` si al editar el issue algún
                label ya no aplica).
             2. Publica un comentario en el issue (`gh issue comment
-               ${{ github.event.issue.number }}`) con un diagnóstico técnico breve:
+               ${{ github.event.issue.number }}`) con un diagnóstico técnico breve,
+               redactado en formato Markdown válido para GitHub (encabezados,
+               listas, bloques de código con \`\`\` cuando cites código, etc.):
                - Causa probable del problema o resumen de la petición.
                - Archivos/funciones de game.js (u otros) probablemente involucrados.
                - Enfoque de solución sugerido, a alto nivel, para usarse después
