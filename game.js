@@ -14,7 +14,11 @@ const COLORS = [
   '#5b8def', // J - pale blue
   '#ffb74d', // L - orange
   '#9e9e9e', // NUT - metallic gray
+  '#ff3d00', // BOMB - fiery red
 ];
+
+const BOMB_TYPE = 9;
+const POWERUP_LINE_INTERVAL = 5;
 
 const PIECES = [
   null,
@@ -26,6 +30,7 @@ const PIECES = [
   [[6,0,0],[6,6,6],[0,0,0]],                  // J
   [[0,0,7],[7,7,7],[0,0,0]],                  // L
   [[8,8,8],[8,0,8],[8,8,8]],                  // NUT - hueco en el centro
+  [[9]],                                      // BOMB - destruye área 3x3 al bloquearse
 ];
 
 const LINE_SCORES = [0, 100, 300, 500, 800];
@@ -47,6 +52,7 @@ const restartBtn = document.getElementById('restart-btn');
 const themeToggleBtn = document.getElementById('theme-toggle');
 
 let board, current, next, score, lines, level, paused, gameOver, lastTime, dropAccum, dropInterval, animId;
+let powerUpProgress, pendingPowerUp;
 let currentTheme = 'dark';
 
 function createBoard() {
@@ -54,7 +60,13 @@ function createBoard() {
 }
 
 function randomPiece() {
-  const type = Math.floor(Math.random() * 8) + 1;
+  let type;
+  if (pendingPowerUp) {
+    type = BOMB_TYPE;
+    pendingPowerUp = false;
+  } else {
+    type = Math.floor(Math.random() * 8) + 1;
+  }
   const shape = PIECES[type].map(row => [...row]);
   return { type, shape, x: Math.floor(COLS / 2) - Math.floor(shape[0].length / 2), y: 0 };
 }
@@ -115,6 +127,11 @@ function clearLines() {
     score += (LINE_SCORES[cleared] || 0) * level;
     level = Math.floor(lines / 10) + 1;
     dropInterval = Math.max(100, 1000 - (level - 1) * 90);
+    powerUpProgress += cleared;
+    if (powerUpProgress >= POWERUP_LINE_INTERVAL) {
+      powerUpProgress -= POWERUP_LINE_INTERVAL;
+      pendingPowerUp = true;
+    }
     updateHUD();
   }
 }
@@ -143,9 +160,29 @@ function softDrop() {
 }
 
 function lockPiece() {
-  merge();
-  clearLines();
+  if (current.type === BOMB_TYPE) {
+    explodeBomb();
+  } else {
+    merge();
+    clearLines();
+  }
   spawn();
+}
+
+function explodeBomb() {
+  const BOMB_SCORE_PER_CELL = 50;
+  let destroyed = 0;
+  for (let r = current.y - 1; r <= current.y + 1; r++) {
+    for (let c = current.x - 1; c <= current.x + 1; c++) {
+      if (r < 0 || r >= ROWS || c < 0 || c >= COLS) continue;
+      if (board[r][c]) {
+        board[r][c] = 0;
+        destroyed++;
+      }
+    }
+  }
+  score += destroyed * BOMB_SCORE_PER_CELL;
+  updateHUD();
 }
 
 function spawn() {
@@ -167,11 +204,29 @@ function drawBlock(context, x, y, colorIndex, size, alpha) {
   if (!colorIndex) return;
   const color = COLORS[colorIndex];
   context.globalAlpha = alpha ?? 1;
-  context.fillStyle = color;
-  context.fillRect(x * size + 1, y * size + 1, size - 2, size - 2);
-  // highlight
-  context.fillStyle = 'rgba(255,255,255,0.12)';
-  context.fillRect(x * size + 1, y * size + 1, size - 2, 4);
+  if (colorIndex === BOMB_TYPE) {
+    const cx = x * size + size / 2;
+    const cy = y * size + size / 2;
+    context.fillStyle = '#1a1a1a';
+    context.beginPath();
+    context.arc(cx, cy, size * 0.38, 0, Math.PI * 2);
+    context.fill();
+    context.strokeStyle = color;
+    context.lineWidth = 2;
+    context.stroke();
+    context.strokeStyle = '#ffca28';
+    context.lineWidth = 2;
+    context.beginPath();
+    context.moveTo(cx + size * 0.15, cy - size * 0.3);
+    context.lineTo(cx + size * 0.32, cy - size * 0.42);
+    context.stroke();
+  } else {
+    context.fillStyle = color;
+    context.fillRect(x * size + 1, y * size + 1, size - 2, size - 2);
+    // highlight
+    context.fillStyle = 'rgba(255,255,255,0.12)';
+    context.fillRect(x * size + 1, y * size + 1, size - 2, 4);
+  }
   context.globalAlpha = 1;
 }
 
@@ -276,6 +331,8 @@ function init() {
   gameOver = false;
   dropInterval = 1000;
   dropAccum = 0;
+  powerUpProgress = 0;
+  pendingPowerUp = false;
   lastTime = performance.now();
   next = randomPiece();
   spawn();
